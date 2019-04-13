@@ -11,6 +11,7 @@ defmodule Bthash do
       fn (block) ->
           :crypto.hash(:sha, block)
       end)
+    # |> Enum.zip(Stream.iterate(0, &(&1 + 1)))
 
     torrent = Exbt.hello()
 
@@ -23,8 +24,9 @@ defmodule Bthash do
       fhash = :erlang.list_to_bitstring(fhash)
       fhash == thash
     end)
-    |> Enum.count(fn result -> result == false end)
+    |> Enum.zip(Stream.iterate(0, &(&1 + 1)))
+    #|> Enum.count(fn result -> result == false end)
 
-    IO.puts(inspect(torrent_hashes))
+    IO.puts(inspect(torrent))
   end
 end
