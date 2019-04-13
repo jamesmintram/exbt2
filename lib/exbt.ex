@@ -140,7 +140,8 @@ defmodule Exbt do
     |> create_data()
 
     # TODO: Pass it into a struct
-    IO.puts(inspect(struct, pretty: true))
+
+    struct
   end
 
   def hello do
@@ -148,11 +149,5 @@ defmodule Exbt do
     data = IO.iodata_to_binary(iodata)
 
     parse_torrent(data)
-
-    # Download one of the files
-    # Write code to verify SHAs
-
-    #{:ok, fh} = :file.open("priv/ubuntu.torrent", [:read, :binary])
-    #parse_torrent(fh)
   end
 end
