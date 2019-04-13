@@ -170,36 +170,39 @@ defmodule Exbt do
 
   #----------------------------------------------
 
-  def encode_list([], acc) do
-    acc
+  def encode_list(hasher, []) do
+    hasher
   end
 
-  def encode_list([:end | rest], acc) do
-    encode_list(rest, acc <> "e")
+  def encode_list(hasher, [:end | rest]) do
+    hasher = :crypto.hash_update(hasher, "e")
+    encode_list(hasher, rest)
   end
 
-  def encode_list([[:int, int] | rest], acc) do
-    encode_list(rest, acc <> "i" <> Integer.to_string(int) <> "e")
+  def encode_list(hasher, [[:int, int] | rest]) do
+    hasher = :crypto.hash_update(hasher, "i")
+    hasher = :crypto.hash_update(hasher, Integer.to_string(int))
+    hasher = :crypto.hash_update(hasher, "e")
+
+    encode_list(hasher, rest)
   end
 
-  def encode_list([[:string, str] | rest], acc) do
-    # encode_list(rest, acc <> length(str) <> ":" <> str)
+  def encode_list(hasher, [[:string, str] | rest]) do
+    hasher = :crypto.hash_update(hasher, Integer.to_string(length(str)))
+    hasher = :crypto.hash_update(hasher, ":")
+    hasher = :crypto.hash_update(hasher, str)
 
-    encode_list(
-      rest,
-      acc
-      <> Integer.to_string(length(str))
-      <> ":"
-      <> List.to_string(str) )
+    encode_list(hasher, rest)
   end
 
-  def encode_list([:dictionary_start | rest], acc) do
-    encode_list(rest, "d" <> acc)
+  def encode_list(hasher, [:dictionary_start | rest]) do
+    hasher = :crypto.hash_update(hasher, "d")
+    encode_list(hasher, rest)
   end
 
   # Unkown item
-  def encode_list([_head | rest], acc) do
-    encode_list(rest, acc)
+  def encode_list(hasher, [_head | rest]) do
+    encode_list(hasher, rest)
   end
 
 
@@ -215,19 +218,14 @@ defmodule Exbt do
 
     {:found, dict} = extract_dictionary(terms)
     # IO.puts(inspect(dict))
-    encoded = encode_list(dict, "")
 
-    {:ok, file} = File.open("priv/out.txt", [:write])
-    IO.binwrite(file, encoded)
-    File.close(file)
+    hash = :crypto.hash_init(:sha)
+    |> encode_list(dict)
+    |> :crypto.hash_final()
+    # |> Base.encode16()
+    |> URI.encode()
 
-
-    hash = :crypto.hash(:sha, encoded)
-    hex = Base.encode16(hash)
-
-    IO.puts("ENCODED")
-    IO.puts(hex)
-    IO.puts("ENCODED")
+    IO.puts("info_hash #{hash}")
     # TODO: Pass it into a struct
 
     struct
