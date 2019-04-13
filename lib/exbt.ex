@@ -131,14 +131,103 @@ defmodule Exbt do
   end
 
   #----------------------------------------------
+
+  def find_dictionary_end(_rest, acc, 0) do
+    {:found, Enum.reverse(acc)}
+  end
+
+  def find_dictionary_end([], _acc, _ctr) do
+    {:error, "Unbalanced start/end"}
+  end
+
+  def find_dictionary_end([:end | rest], acc, ctr) do
+    find_dictionary_end(rest, [:end | acc], ctr - 1)
+  end
+
+  def find_dictionary_end([:dictionary_start | rest], acc, ctr) do
+    find_dictionary_end(rest, [:dictionary_start | acc], ctr + 1)
+  end
+
+  def find_dictionary_end([:list_start | rest], acc, ctr) do
+    find_dictionary_end(rest, [:list_start | acc], ctr + 1)
+  end
+
+  def find_dictionary_end([head | rest], acc, ctr) do
+    find_dictionary_end(rest, [head | acc], ctr)
+  end
+
+  def extract_dictionary([]) do
+    {:not_found, []}
+  end
+
+  def extract_dictionary([[:string, 'info'], :dictionary_start | rest]) do
+    find_dictionary_end(rest, [:dictionary_start], 1)
+  end
+
+  def extract_dictionary([_head | rest]) do
+    extract_dictionary(rest)
+  end
+
+  #----------------------------------------------
+
+  def encode_list([], acc) do
+    acc
+  end
+
+  def encode_list([:end | rest], acc) do
+    encode_list(rest, acc <> "e")
+  end
+
+  def encode_list([[:int, int] | rest], acc) do
+    encode_list(rest, acc <> "i" <> Integer.to_string(int) <> "e")
+  end
+
+  def encode_list([[:string, str] | rest], acc) do
+    # encode_list(rest, acc <> length(str) <> ":" <> str)
+
+    encode_list(
+      rest,
+      acc
+      <> Integer.to_string(length(str))
+      <> ":"
+      <> List.to_string(str) )
+  end
+
+  def encode_list([:dictionary_start | rest], acc) do
+    encode_list(rest, "d" <> acc)
+  end
+
+  # Unkown item
+  def encode_list([_head | rest], acc) do
+    encode_list(rest, acc)
+  end
+
+
+  #----------------------------------------------
   # Main parser
 
   def parse_torrent(data) do
 
-    struct = data
-    |> create_terms()
-    |> create_data()
+    terms = create_terms(data)
+    struct = create_data(terms)
 
+    # IO.puts(inspect(terms))
+
+    {:found, dict} = extract_dictionary(terms)
+    # IO.puts(inspect(dict))
+    encoded = encode_list(dict, "")
+
+    {:ok, file} = File.open("priv/out.txt", [:write])
+    IO.binwrite(file, encoded)
+    File.close(file)
+
+
+    hash = :crypto.hash(:sha, encoded)
+    hex = Base.encode16(hash)
+
+    IO.puts("ENCODED")
+    IO.puts(hex)
+    IO.puts("ENCODED")
     # TODO: Pass it into a struct
 
     struct
