@@ -209,32 +209,49 @@ defmodule Exbt do
   #----------------------------------------------
   # Main parser
 
-  def parse_torrent(data) do
+  def parse_bencode(data) do
 
     terms = create_terms(data)
     struct = create_data(terms)
 
-    # IO.puts(inspect(terms))
 
-    {:found, dict} = extract_dictionary(terms)
-    # IO.puts(inspect(dict))
+    # {:found, dict} = extract_dictionary(terms)
 
-    hash = :crypto.hash_init(:sha)
-    |> encode_list(dict)
-    |> :crypto.hash_final()
-    # |> Base.encode16()
-    |> URI.encode()
+    # hash = :crypto.hash_init(:sha)
+    # |> encode_list(dict)
+    # |> :crypto.hash_final()
+    # |> URI.encode()
 
-    IO.puts("info_hash #{hash}")
-    # TODO: Pass it into a struct
+    # IO.puts("info_hash #{hash}")
+
 
     struct
   end
 
+  # Parse torrent struct
+  # Parse response struct
+  def get_peers(response) do
+
+    response
+    |> Map.get('peers')
+    |> Enum.chunk_every(6)
+    |> Enum.map(&(:binary.list_to_bin(&1)))
+    |> Enum.map(
+      fn  <<ip1, ip2, ip3, ip4, port::size(16)>> ->
+        {{ip1, ip2, ip3, ip4}, port}
+      end)
+
+  end
+
   def hello do
-    iodata = File.read!("priv/ubuntu2.torrent")
+    # iodata = File.read!("priv/ubuntu2.torrent")
+    iodata = File.read!("priv/peers.txt")
     data = IO.iodata_to_binary(iodata)
 
-    parse_torrent(data)
+    peers = data
+    |> parse_bencode()
+    |> get_peers()
+
+    IO.puts(inspect(peers, pretty: true))
   end
 end
