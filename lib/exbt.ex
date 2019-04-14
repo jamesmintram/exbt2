@@ -214,23 +214,25 @@ defmodule Exbt do
     terms = create_terms(data)
     struct = create_data(terms)
 
+    %{data: struct, terms: terms}
+  end
 
-    # {:found, dict} = extract_dictionary(terms)
+  def get_torrent(%{data: data, terms: terms}) do
+    {:found, dict} = extract_dictionary(terms)
 
-    # hash = :crypto.hash_init(:sha)
-    # |> encode_list(dict)
-    # |> :crypto.hash_final()
-    # |> URI.encode()
+    raw_hash = :crypto.hash_init(:sha)
+    |> encode_list(dict)
+    |> :crypto.hash_final()
 
-    # IO.puts("info_hash #{hash}")
-
-
-    struct
+    Map.put(data, :info_hash, %{
+      raw: raw_hash,
+      uri: URI.encode(raw_hash)
+    })
   end
 
   # Parse torrent struct
   # Parse response struct
-  def get_peers(response) do
+  def get_peers(%{data: response} = _data) do
 
     response
     |> Map.get('peers')
@@ -244,14 +246,43 @@ defmodule Exbt do
   end
 
   def hello do
-    # iodata = File.read!("priv/ubuntu2.torrent")
-    iodata = File.read!("priv/peers.txt")
+    iodata = File.read!("priv/ubuntu2.torrent")
+    # iodata = File.read!("priv/peers.txt")
     data = IO.iodata_to_binary(iodata)
 
-    peers = data
+    torrent = data
     |> parse_bencode()
-    |> get_peers()
+    |> get_torrent()
+    # |> get_peers()
 
-    IO.puts(inspect(peers, pretty: true))
+    # Need something to manage this
+    peer = %{
+      id: "ieusjdkeowisjdkflwoe"
+    }
+
+    # Need some module for building these
+    query = %{
+      info_hash: torrent.info_hash.raw,
+      peer_id: peer.id,
+
+      port: 51413,
+
+      uploaded: 0,
+      downloaded: 0,
+
+      left: 1157627904,
+
+      compact: 1
+    }
+
+    # IO.puts(inspect(query))
+
+    response = HTTPotion.get(
+      torrent['announce'],
+      query: query)
+
+    body_data = parse_bencode(response.body)
+
+    IO.puts(inspect(body_data, pretty: true))
   end
 end
