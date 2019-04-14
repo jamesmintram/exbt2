@@ -262,16 +262,18 @@ defmodule Exbt do
 
     # Need some module for building these
     query = %{
-      info_hash: torrent.info_hash.raw,
-      peer_id: peer.id,
 
+      # Network
+      peer_id: peer.id,
       port: 51413,
 
+      # Torrent specific
+      info_hash: torrent.info_hash.raw,
       uploaded: 0,
       downloaded: 0,
-
       left: 1157627904,
 
+      # Common
       compact: 1
     }
 
@@ -283,6 +285,17 @@ defmodule Exbt do
 
     body_data = parse_bencode(response.body)
 
-    IO.puts(inspect(body_data, pretty: true))
+    peers = get_peers(body_data)
+
+    [{peer_host, peer_port} | _] = peers
+
+    {:ok, _pid} = Btpeer.start_link(%{
+      host: peer_host,
+      port: peer_port,
+      self: peer,
+      torrent: torrent,
+    })
+
+    # IO.puts("Connect to #{ip1}.#{ip2}.#{ip3}.#{ip4}:#{peer_port}")
   end
 end
