@@ -21,58 +21,61 @@ defmodule Btpeer do
       Map.put(@initial_state, :config, config))
   end
 
-  def handle_data(<<>> ) do
+  def handle_data(<<0, 0, 0, 0>>, state) do
     IO.puts("Keepalive")
+    state
   end
-  def handle_data(<<_size::size(32), @choke::size(8), _payload::binary>>) do
+  def handle_data(<<_size::size(32), @choke::size(8), _payload::binary>> = data, state) do
     IO.puts("Choke")
+    IO.puts(inspect(data))
+    state
   end
-  def handle_data(<<_size::size(32), @unchoke::size(8), _payload::binary>>) do
+  def handle_data(<<_size::size(32), @unchoke::size(8), _payload::binary>>, state) do
     IO.puts("Unchoke")
+    Map.put(state, :state, :unchoked)
   end
-  def handle_data(<<_size::size(32), @interested::size(8), _payload::binary>>) do
+  def handle_data(<<_size::size(32), @interested::size(8), _payload::binary>>, state) do
     IO.puts("Interested")
+    state
   end
-  def handle_data(<<_size::size(32), @not_interested::size(8), _payload::binary>>) do
+  def handle_data(<<_size::size(32), @not_interested::size(8), _payload::binary>>, state) do
     IO.puts("NotInterested")
+    state
   end
-  def handle_data(<<_size::size(32), @have::size(8), _payload::binary>>) do
+  def handle_data(<<_size::size(32), @have::size(8), _payload::binary>>, state) do
     IO.puts("Have")
+    state
   end
-  def handle_data(<<_size::size(32), @bitfield::size(8), _payload::binary>>) do
+  def handle_data(<<_size::size(32), @bitfield::size(8), _payload::binary>>, state) do
     IO.puts("Bitfield")
+    state
   end
-  def handle_data(<<_size::size(32), @request::size(8), _payload::binary>>) do
+  def handle_data(<<_size::size(32), @request::size(8), _payload::binary>>, state) do
     IO.puts("Request")
+    state
   end
-  def handle_data(<<_size::size(32), @piece::size(8), _payload::binary>>) do
+  def handle_data(<<_size::size(32), @piece::size(8), _payload::binary>>, state) do
     IO.puts("Piece")
+    state
   end
-  def handle_data(<<_size::size(32), @cancel::size(8), _payload::binary>>) do
+  def handle_data(<<_size::size(32), @cancel::size(8), _payload::binary>>, state) do
     IO.puts("Cancel")
+    state
   end
-  def handle_data(<<_size::size(32), @extended::size(8), _payload::binary>>) do
+  def handle_data(<<_size::size(32), @extended::size(8), _payload::binary>>, state) do
     IO.puts("Unhandled extended payload")
+    state
   end
   def handle_data(
     <<_size::size(32),
       unkown_type::size(8),
-      _payload::binary>> = _data) do
+      _payload::binary>> = _data, state) do
 
     IO.puts("Unkown type #{unkown_type}, skipping")
+    state
   end
 
-  # def handle_socket(socket) do
-  #   {:ok, rest} = :gen_tcp.recv(socket, 0)
-  #   handle_data(rest)
-
-  #   handle_socket(socket)
-  # end
-
-
-
   def handle_info({:tcp, _, data}, %{state: :new} = state) do
-    # Logger.info "Received #{data}"
     IO.puts("Handshake")
 
     <<0x13,
@@ -92,9 +95,44 @@ defmodule Btpeer do
     {:noreply, state}
   end
 
-  def handle_info({:tcp, _, data}, state) do
-    handle_data(data)
-    {:noreply, state}
+  def handle_info({:tcp, socket, data}, state) do
+    # Reciever state to say we are recieving something? Buffer it in memory?
+    # Once we have reached the piece size we are expecting, return to :recv_state
+
+    IO.puts("Handle info")
+    new_state = handle_data(data, state)
+    new_state = update(new_state.state, new_state, socket)
+
+    # Return a timeout for 10s?
+
+    {:noreply, new_state}
+  end
+
+  def handle_info({:tcp_closed, _}, state) do
+    IO.puts("tcp close")
+    {:stop, :normal, state}
+  end
+  def handle_info({:tcp_error, _}, state) do
+    IO.puts("tcp error")
+    {:stop, :normal, state}
+  end
+
+  def update(:unchoked, state, socket) do
+    data_request = <<
+      <<13::big-size(32)>>,
+      @request,
+      0::big-size(32),     # Piece index
+      0::big-size(32),     # Piece offset
+      0x4000::big-size(32) # Piece size
+    >>
+    IO.puts("Requesting data")
+    :gen_tcp.send(socket, data_request)
+
+    Map.put(state, :state, :awaiting_data)
+  end
+
+  def update(_status, state, _) do
+    state
   end
 
   def init(state) do
