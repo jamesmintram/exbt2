@@ -287,7 +287,7 @@ defmodule Exbt do
 
     peers = get_peers(body_data)
 
-    [{peer_host, peer_port} | _] = peers
+    [___, __, {peer_host, peer_port} | _] = peers
 
     {:ok, _pid} = Btpeer.start_link(%{
       host: peer_host,
