@@ -62,8 +62,43 @@ defmodule Btpeer do
     IO.puts("Unkown type #{unkown_type}, skipping")
   end
 
+  # def handle_socket(socket) do
+  #   {:ok, rest} = :gen_tcp.recv(socket, 0)
+  #   handle_data(rest)
+
+  #   handle_socket(socket)
+  # end
+
+
+
+  def handle_info({:tcp, _, data}, %{state: :new} = state) do
+    # Logger.info "Received #{data}"
+    IO.puts("Handshake")
+
+    <<0x13,
+      protocol::binary - size(19),
+      _reserved::binary - size(8),
+      info_hash::binary - size(20),
+      _peer_id::binary - size(20),
+      _rest::binary
+      >> = data
+
+    IO.puts("Response:")
+    IO.puts("Protocol: #{to_string(protocol)}")
+    IO.puts("InfoHash: #{Base.encode16(info_hash)}")
+
+    state = Map.put(state, :state, :connected)
+
+    {:noreply, state}
+  end
+
+  def handle_info({:tcp, _, data}, state) do
+    handle_data(data)
+    {:noreply, state}
+  end
+
   def init(state) do
-    opts = [:binary, active: false]
+    opts = [:binary, active: true]
     config = state.config
 
     IO.puts("Connecting to peer: #{inspect(config.host)}")
@@ -81,26 +116,22 @@ defmodule Btpeer do
 
     :ok = :gen_tcp.send(socket, handshake)
 
-    {:ok, msg} = :gen_tcp.recv(socket, 0)
-
-    <<0x13,
-      protocol::binary - size(19),
-      _reserved::binary - size(8),
-      info_hash::binary - size(20),
-      _peer_id::binary - size(20),
-      _rest::binary
-      >> = msg
-
-    IO.puts("Response:")
-    IO.puts("Protocol: #{to_string(protocol)}")
-    IO.puts("InfoHash: #{Base.encode16(info_hash)}")
-    # IO.puts("PeerId: #{to_string(peer_id)}")
+    # {:ok, msg} = :gen_tcp.recv(socket, 0)
 
 
 
-    {:ok, rest} = :gen_tcp.recv(socket, 0)
-    # IO.puts("Rest: #{inspect rest}")
-    handle_data(rest)
+    # Task.start_link(fn -> handle_socket(socket) end)
+
+    state = state
+    |> Map.put(:socket, socket)
+    |> Map.put(:state, :new)
+
+    {:ok, state}
+  end
+end
+
+
+
 
     # Pretty gross, any better way?
     # msg_hex = msg
@@ -114,7 +145,3 @@ defmodule Btpeer do
 
     # Parse msg back into a header struct
     # IO.puts("Response: \n #{msg_hex}")
-
-    {:ok, %{state | socket: socket}}
-  end
-end
