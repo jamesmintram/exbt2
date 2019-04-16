@@ -15,67 +15,69 @@ defmodule Btpeer do
 
   @initial_state %{socket: nil}
 
+  @handshake_opts  [:binary, active: true]
+  @connection_opts  [:binary, active: true, packet: 4]
+
   def start_link(config) do
     GenServer.start_link(
       __MODULE__,
       Map.put(@initial_state, :config, config))
   end
 
-  def handle_data(<<0, 0, 0, 0>>, state) do
+  def handle_data(<<>>, state) do
     IO.puts("Keepalive")
     state
   end
-  def handle_data(<<_size::size(32), @choke::size(8), _payload::binary>> = data, state) do
+  def handle_data(<<@choke::size(8)>> = data, state) do
     IO.puts("Choke")
     IO.puts(inspect(data))
     state
   end
-  def handle_data(<<_size::size(32), @unchoke::size(8), _payload::binary>>, state) do
+  def handle_data(<<@unchoke::size(8)>>, state) do
     IO.puts("Unchoke")
     Map.put(state, :state, :unchoked)
   end
-  def handle_data(<<_size::size(32), @interested::size(8), _payload::binary>>, state) do
+  def handle_data(<<@interested::size(8), _payload::binary>>, state) do
     IO.puts("Interested")
     state
   end
-  def handle_data(<<_size::size(32), @not_interested::size(8), _payload::binary>>, state) do
+  def handle_data(<<@not_interested::size(8), _payload::binary>>, state) do
     IO.puts("NotInterested")
     state
   end
-  def handle_data(<<_size::size(32), @have::size(8), _payload::binary>>, state) do
+  def handle_data(<<@have::size(8), _payload::binary>>, state) do
     IO.puts("Have")
     state
   end
-  def handle_data(<<_size::size(32), @bitfield::size(8), _payload::binary>>, state) do
+  def handle_data(<<@bitfield::size(8), _payload::binary>>, state) do
     IO.puts("Bitfield")
     state
   end
-  def handle_data(<<_size::size(32), @request::size(8), _payload::binary>>, state) do
+  def handle_data(<<@request::size(8), _payload::binary>>, state) do
     IO.puts("Request")
     state
   end
-  def handle_data(<<_size::size(32), @piece::size(8), _payload::binary>>, state) do
+  def handle_data(<<@piece::size(8), _payload::binary>>, state) do
     IO.puts("Piece")
     state
   end
-  def handle_data(<<_size::size(32), @cancel::size(8), _payload::binary>>, state) do
+  def handle_data(<<@cancel::size(8), _payload::binary>>, state) do
     IO.puts("Cancel")
     state
   end
-  def handle_data(<<_size::size(32), @extended::size(8), _payload::binary>>, state) do
+  def handle_data(<<@extended::size(8), _payload::binary>>, state) do
     IO.puts("Unhandled extended payload")
     state
   end
   def handle_data(
-    <<_size::size(32),
-      unkown_type::size(8),
+    << unkown_type::size(8),
       _payload::binary>> = _data, state) do
 
     IO.puts("Unkown type #{unkown_type}, skipping")
     state
   end
 
-  def handle_info({:tcp, _, data}, %{state: :new} = state) do
+  def handle_info({:tcp, socket, data}, %{state: :new} = state) do
     IO.puts("Handshake")
 
     <<0x13,
@@ -92,6 +94,8 @@ defmodule Btpeer do
 
     state = Map.put(state, :state, :connected)
 
+    :inet.setopts(socket, @connection_opts)
+
     {:noreply, state}
   end
 
@@ -100,6 +104,7 @@ defmodule Btpeer do
     # Once we have reached the piece size we are expecting, return to :recv_state
 
     IO.puts("Handle info")
+    IO.puts(inspect(data))
     new_state = handle_data(data, state)
     new_state = update(new_state.state, new_state, socket)
 
@@ -112,14 +117,15 @@ defmodule Btpeer do
     IO.puts("tcp close")
     {:stop, :normal, state}
   end
-  def handle_info({:tcp_error, _}, state) do
+  def handle_info({:tcp_error, _, err}, state) do
     IO.puts("tcp error")
+    IO.puts(inspect(err, pretty: true))
     {:stop, :normal, state}
   end
 
   def update(:unchoked, state, socket) do
     data_request = <<
-      <<13::big-size(32)>>,
+      # <<13::big-size(32)>>,
       @request,
       0::big-size(32),     # Piece index
       0::big-size(32),     # Piece offset
@@ -136,12 +142,12 @@ defmodule Btpeer do
   end
 
   def init(state) do
-    opts = [:binary, active: true]
+
     config = state.config
 
     IO.puts("Connecting to peer: #{inspect(config.host)}")
 
-    {:ok, socket} = :gen_tcp.connect(config.host, config.port, opts)
+    {:ok, socket} = :gen_tcp.connect(config.host, config.port, @handshake_opts)
 
     # TODO: Encode handshake
     handshake = <<0x13>>
@@ -150,13 +156,13 @@ defmodule Btpeer do
     <> config.torrent.info_hash.raw
     <> config.self.id
 
-    IO.puts(Base.encode16(handshake))
-
     :ok = :gen_tcp.send(socket, handshake)
+
+
 
     # {:ok, msg} = :gen_tcp.recv(socket, 0)
 
-
+    IO.puts("Sent handshake")
 
     # Task.start_link(fn -> handle_socket(socket) end)
 
