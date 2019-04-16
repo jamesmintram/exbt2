@@ -13,10 +13,13 @@ defmodule Btpeer do
 
   @extended 20
 
-  @initial_state %{socket: nil}
+  @initial_state %{socket: nil, piece_idx: 0, chunk_data: <<>>}
 
   @handshake_opts  [:binary, active: true]
   @connection_opts  [:binary, active: true, packet: 4]
+
+  @chunk_size 1024 * 512
+  @piece_size 0x4000
 
   def start_link(config) do
     GenServer.start_link(
@@ -57,10 +60,48 @@ defmodule Btpeer do
     IO.puts("Request")
     state
   end
-  def handle_data(<<@piece::size(8), _payload::binary>>, state) do
-    IO.puts("Piece")
-    state
+  def handle_data(<<@piece::size(8), payload::binary>>, state) do
+    IO.puts("Piece at offset #{state.piece_idx}")
+
+    payload_size = byte_size(payload)
+    next_idx = state.piece_idx + payload_size
+
+    # Update the downloaded data
+    state = state
+      |> Map.update(:chunk_data, <<>>, &(&1 <> payload))
+      |> Map.update(:piece_idx, 0, &(&1 + payload_size))
+
+    if next_idx > @chunk_size do
+      IO.puts("Chunk complete at: #{next_idx}")
+      IO.puts("Chunk Size: #{byte_size(state.chunk_data)}")
+
+      # Do something with the completed chunk
+      hex_sha = Base.encode16(:crypto.hash(:sha, state.chunk_data))
+
+
+      t_hex_sha = state.config.torrent
+      |> get_in(['info', 'pieces'])
+      |> Enum.take(20)
+      |> :erlang.list_to_bitstring()
+      |> Base.encode16()
+
+      IO.puts(hex_sha)
+      IO.puts(t_hex_sha)
+
+      File.write("priv/chunk0.bin", state.chunk_data)
+
+      state
+      |> Map.put(:state, :complete)
+      |> Map.put(:piece_idx, 0)
+      |> Map.put(:chunk_data, <<>>)
+    else
+      IO.puts("Next piece: #{next_idx}")
+      state
+      |> Map.put(:state, :unchoked)
+
+    end
   end
+
   def handle_data(<<@cancel::size(8), _payload::binary>>, state) do
     IO.puts("Cancel")
     state
@@ -124,14 +165,18 @@ defmodule Btpeer do
   end
 
   def update(:unchoked, state, socket) do
+
+    data_remaining = @chunk_size - state.piece_idx
+    chunk_size = min(@piece_size, data_remaining)
+
     data_request = <<
       # <<13::big-size(32)>>,
       @request,
-      0::big-size(32),     # Piece index
-      0::big-size(32),     # Piece offset
-      0x4000::big-size(32) # Piece size
+      0::big-size(32),                  # Piece index
+      state.piece_idx::big-size(32),    # Piece offset
+      chunk_size::big-size(32)          # Piece size
     >>
-    IO.puts("Requesting data")
+    IO.puts("Requesting data: #{chunk_size}")
     :gen_tcp.send(socket, data_request)
 
     Map.put(state, :state, :awaiting_data)
