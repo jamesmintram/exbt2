@@ -1,3 +1,18 @@
+Currently the hash calculated is incorrect for the block. There is an off by 1
+error somewhere - the last or first block is all zero.
+
+
+- The block is saved out to priv/chunk0.bin 
+- Setup a better test file
+- Fix hash
+- Download whole file
+
+
+- Struct to represent a decoded torrent file 
+- Think about struct type assertions
+- Testing, bencode module
+
+
 Tracker URLs
 ============
 

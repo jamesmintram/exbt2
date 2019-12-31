@@ -1,4 +1,4 @@
-defmodule Btpeer do
+defmodule Exbt.Downloader do
   use GenServer
 
   @choke 0
@@ -218,6 +218,7 @@ defmodule Btpeer do
     {:ok, state}
   end
 end
+
 
 
 
