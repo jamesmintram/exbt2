@@ -17,8 +17,8 @@ defmodule Exbt do
 
     IO.puts(inspect(@self))
 
-    torrent = Torrent.from_file("priv/office.iso.torrent")
-    peers = Torrent.fetch_peers(torrent, @self)
+    torrent = Torrent.from_file("priv/testpg.torrent")
+    {:ok, peers} = Torrent.fetch_peers(torrent, @self)
 
     IO.puts("Peers retrieved")
     Enum.map(peers, fn peer -> IO.puts("\t" <> Peer.to_str(peer)) end)

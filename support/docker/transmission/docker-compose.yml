@@ -1,0 +1,33 @@
+version: "2.1"
+services:
+  transmission:
+    image: linuxserver/transmission
+    container_name: transmission
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      # - TRANSMISSION_WEB_HOME=/combustion-release/ #optional
+      # - USER=username #optional
+      # - PASS=password #optional
+    volumes:
+      - ./config:/config
+      - ./downloads:/downloads
+      - ./watch:/watch
+    ports:
+      - 9091:9091
+      - 51413:51413
+      - 51413:51413/udp
+    restart: unless-stopped
+
+  bittorrent-tracker:
+    image: lednerb/opentracker-docker
+    container_name: bittorrent-tracker
+    network_mode: host
+    ports:
+      - 6969:6969
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - STATS=true # optionally add your configuration here
+    restart: unless-stopped

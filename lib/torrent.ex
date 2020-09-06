@@ -29,8 +29,6 @@ defmodule Exbt.Torrent do
     {:ok, vsn} = :application.get_key(:exbt, :vsn)
     vsn = List.to_string(vsn)
 
-
-
     # Need some module for building these
     query = %{
       # Network
@@ -51,11 +49,16 @@ defmodule Exbt.Torrent do
       torrent['announce'],
       query: query)
 
-    body_data = Bencode.decode(response.body)
+    case response.status_code do
+      200 ->
+        peers = response.body
+        |> Bencode.decode()
+        |> get_peers()
 
-    IO.puts(inspect(query))
-
-    get_peers(body_data)
+        {:ok, peers}
+      _ ->
+        {:error, :failed_to_get_peers}
+    end
   end
 
   defp get_peers(%{data: response} = _data) do
